@@ -14,38 +14,56 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
+import Api from '../tools/api';
+import * as R from "ramda"
 
  const api = new Api();
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+const validateString = (str) => R.allPass([
+    (str) => str.length < 10,
+    (str) => str.length > 2,
+    (str) => Number(str) > 0,
+    RegExp.prototype.test.bind(/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$/)
+])(str)
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
+    const tapFn = (fn) => (value) => R.tap(fn, value)
+    const useWriteLog = tapFn(writeLog)
+    const apiRequest = (apiUrl, requestParams, newPipe) =>
+        api.get(apiUrl, requestParams)
+            .then(({result}) => newPipe(result))
+            .catch((err) => handleError('API error:' + err))
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+    const convertNumberRequest = (newPipe) => (value) => apiRequest(
+        'https://api.tech/numbers/base', {from: 10, to: 2, number: value}, newPipe)
+    const animalTechRequest = (newPipe) => (value) => apiRequest(
+        `https://animals.tech/${value}`, {}, newPipe)
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
-
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
-
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+    R.pipe(
+        useWriteLog,
+        tapFn((value) => {
+            if (!validateString(value)) {
+                handleError('ValidationError')
+            }
+        }),
+        Number,
+        Math.round,
+        useWriteLog,
+        convertNumberRequest(
+            R.pipe(
+                useWriteLog,
+                R.length,
+                useWriteLog,
+                (v) => v * v,
+                useWriteLog,
+                (v) => v % 3,
+                useWriteLog,
+                animalTechRequest(
+                    handleSuccess
+                )
+            )
+        )
+    )(value)
+}
 
 export default processSequence;

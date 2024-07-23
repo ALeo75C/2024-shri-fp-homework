@@ -21,108 +21,66 @@ const isBlue = color => color === 'blue'
 const isOrange = color => color === 'orange'
 const isWhite = color => color === 'white'
 
-const createPrdicates = obj => {
-    const predicates = Object.entries(obj).map(([shape, color]) => R.propEq(shape, color))
-    // console.log(predicates)
-    return R.allPass(predicates)
-}
 
-const isNotWhite = R.complement(isWhite)
+const isNotColor = (predicate) => R.complement(predicate)
+const shapeHasColor = (shape, colorChecker) => (shapes) => colorChecker(shapes[shape])
 
-const isAnyNotWhite = (objs) => objs.some(isNotWhite)
+const createPredefinedColorChecker = (pattern) => R.allPass(
+    Object.entries(pattern).map(
+        ([shape, colorChecker]) => shapeHasColor(shape, colorChecker)
+    )
+)
+
+const haveSameColor = (shapeA, shapeB) => (shapes) => shapes[shapeA] === shapes[shapeB]
+
+const colorCounterPredicate = (colorChecker) => (shapes) => R.count(colorChecker, Object.values(shapes))
 
 
 // 1. Красная звезда, зеленый квадрат, все остальные белые.
-export const validateFieldN1 = (shapes) => {
-    const correctInput = {
-        star: 'red', 
-        square: 'green', 
-        triangle: 'white', 
-        circle: 'white'
-    }
-    const checkColors = createPrdicates(correctInput)
-    return checkColors(shapes)
-};
+export const validateFieldN1 = (shapes) => createPredefinedColorChecker(
+    {star: isRed, square: isGreen, triangle: isWhite, circle: isWhite}
+)(shapes)
+
 
 // 2. Как минимум две фигуры зеленые.
-export const validateFieldN2 = (sequense) => {
-    const colors = {}
-    for(let color of Object.values(sequense)) {
-        colors[color] = colors[color] ? colors[color] + 1 : 1
-    }
-    
-    if (colors.green >= 2) {
-        return true
-    }
-    return false
-};
+export const validateFieldN2 = (shapes) => colorCounterPredicate(isGreen)(shapes) >= 2
 
 // 3. Количество красных фигур равно кол-ву синих.
-export const validateFieldN3 = (sequense) => {
-    const colors = {}
-    for(let color of Object.values(sequense)) {
-        colors[color] = colors[color] ? colors[color] + 1 : 1
-    }
-    
-    if (colors.red === colors.blue) {
-        return true
-    }
-    return false
-};
+export const validateFieldN3 = (shapes) => colorCounterPredicate(isRed)(shapes) === colorCounterPredicate(isBlue)(shapes)
 
 // 4. Синий круг, красная звезда, оранжевый квадрат треугольник любого цвета
-export const validateFieldN4 = (shapes) => {
-    const correctInput = {
-        star: 'red', 
-        square: 'orange', 
-        circle: 'blue'
-    }
-    const checkColors = createPrdicates(correctInput)
-    return checkColors(shapes)
-};
+export const validateFieldN4 = (shapes) => createPredefinedColorChecker({circle: isBlue, star: isRed, square: isOrange})(shapes)
 
 // 5. Три фигуры одного любого цвета кроме белого (четыре фигуры одного цвета – это тоже true).
-export const validateFieldN5 = (sequense) => {
-    const colors = {}
-    for(let color of Object.values(sequense)) {
-        colors[color] = colors[color] ? colors[color] + 1 : 1
-    }
-    
-    if (colors.green >= 2) {
-        return true
-    }
-    return false
-};
+
+export const validateFieldN5 = (shapes) => R.pipe(
+    Object.values,
+    R.countBy((c) => c),
+    ({white, ...otherColors}) => otherColors,
+    Object.values,
+    (values) => Math.max(...values) >= 3
+)(shapes)
 
 // 6. Ровно две зеленые фигуры (одна из зелёных – это треугольник), плюс одна красная. Четвёртая оставшаяся любого доступного цвета, но не нарушающая первые два условия
-export const validateFieldN6 = () => false;
+const colorPredicateCounterEquals = (colorPredicate, count) => (shapes) => colorCounterPredicate(colorPredicate)(shapes) === count
+
+export const validateFieldN6 = (shapes) => R.allPass([
+    createPredefinedColorChecker({triangle: isGreen}),
+    colorPredicateCounterEquals(isGreen, 2),
+    colorPredicateCounterEquals(isRed, 1)
+])(shapes)
 
 // 7. Все фигуры оранжевые.
-export const validateFieldN7 = (shapes) => {
-    const correctInput = {
-        star: 'orange', 
-        square: 'orange', 
-        circle: 'orange',
-        triangle: 'orange'
-    }
-    const checkColors = createPrdicates(correctInput)
-    return checkColors(shapes)
-};
+export const validateFieldN7 = (shapes) => colorCounterPredicate(isOrange)(shapes) === shapes.length
 
 // 8. Не красная и не белая звезда, остальные – любого цвета.
-export const validateFieldN8 = () => false;
+export const validateFieldN8 = ({star}) => R.allPass([isNotColor(isRed), isNotColor(isWhite)])(star)
 
 // 9. Все фигуры зеленые.
-export const validateFieldN9 = (shapes) => {
-    const correctInput = {
-        star: 'green', 
-        square: 'green', 
-        circle: 'green',
-        triangle: 'green'
-    }
-    const checkColors = createPrdicates(correctInput)
-    return checkColors(shapes)
-};
+export const validateFieldN9 = (shapes) => colorCounterPredicate(isGreen)(shapes) === shapes.length
 
 // 10. Треугольник и квадрат одного цвета (не белого), остальные – любого цвета
-export const validateFieldN10 = () => false;
+export const validateFieldN10 = (shapes) => R.allPass([
+    haveSameColor('triangle', 'square'),
+    createPredefinedColorChecker({triangle: isNotColor(isWhite), square: isNotColor(isWhite)})
+])(shapes)
